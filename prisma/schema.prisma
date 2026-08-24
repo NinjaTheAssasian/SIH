@@ -1,0 +1,695 @@
+// AI-Powered Job Portal + Placement Intelligence Platform
+// Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ============================================================================
+// AUTHENTICATION & USERS
+// ============================================================================
+
+enum Role {
+  JOB_SEEKER
+  RECRUITER
+  INSTITUTE
+  ADMIN
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  role          Role
+  emailVerified Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Role-specific profiles (one-to-one)
+  candidateProfile  CandidateProfile?
+  recruiterProfile  RecruiterProfile?
+  instituteProfile  InstituteProfile?
+
+  @@index([email])
+  @@index([role])
+}
+
+// ============================================================================
+// CANDIDATE / JOB SEEKER
+// ============================================================================
+
+model CandidateProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Basic Info
+  fullName          String
+  phone             String?
+  location          String?
+  profileComplete   Boolean  @default(false)
+
+  // Student Info (if from an institute)
+  instituteId       String?
+  institute         Institute? @relation(fields: [instituteId], references: [id])
+  studentId         String?   // Institute roll number
+  departmentId      String?
+  department        Department? @relation(fields: [departmentId], references: [id])
+  degree            String?   // B.Tech, M.Tech, etc.
+  graduationYear    Int?
+  cgpa              Float?
+
+  // Profile visibility
+  isPublic          Boolean  @default(true)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  resumes           Resume[]
+  skills            CandidateSkill[]
+  education         Education[]
+  experiences       Experience[]
+  projects          Project[]
+  certifications    Certification[]
+  applications      Application[]
+  savedJobs         SavedJob[]
+  candidateMatches  CandidateMatch[]
+  skillGaps         SkillGap[]
+  learningPlans     LearningRecommendation[]
+  placementDriveStudents PlacementDriveStudent[]
+
+  @@index([instituteId])
+  @@index([departmentId])
+  @@index([graduationYear])
+}
+
+model Resume {
+  id              String   @id @default(cuid())
+  candidateId     String
+  candidate       CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  fileName        String
+  fileUrl         String
+  fileSize        Int
+  mimeType        String
+
+  // Extracted data
+  extractedText   String?
+  isProcessed     Boolean  @default(false)
+  isPrimary       Boolean  @default(false)
+
+  uploadedAt      DateTime @default(now())
+
+  @@index([candidateId])
+  @@index([isPrimary])
+}
+
+// ============================================================================
+// SKILLS TAXONOMY
+// ============================================================================
+
+model Skill {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  category        String   // Programming, Backend, Frontend, Database, Cloud, DevOps, etc.
+  description     String?
+
+  createdAt       DateTime @default(now())
+
+  // Relations
+  aliases         SkillAlias[]
+  candidateSkills CandidateSkill[]
+  jobSkills       JobSkill[]
+
+  @@index([category])
+}
+
+model SkillAlias {
+  id        String @id @default(cuid())
+  alias     String @unique
+  skillId   String
+  skill     Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@index([skillId])
+}
+
+model CandidateSkill {
+  id              String   @id @default(cuid())
+  candidateId     String
+  candidate       CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  skillId         String
+  skill           Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  proficiencyLevel String? // Beginner, Intermediate, Advanced, Expert
+  yearsOfExperience Float?
+  source          String?  // resume, manual, project, certification
+
+  addedAt         DateTime @default(now())
+
+  @@unique([candidateId, skillId])
+  @@index([candidateId])
+  @@index([skillId])
+}
+
+// ============================================================================
+// CANDIDATE PROFILE DATA
+// ============================================================================
+
+model Education {
+  id              String   @id @default(cuid())
+  candidateId     String
+  candidate       CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  institution     String
+  degree          String
+  fieldOfStudy    String?
+  startDate       DateTime?
+  endDate         DateTime?
+  grade           String?
+  description     String?
+
+  createdAt       DateTime @default(now())
+
+  @@index([candidateId])
+}
+
+model Experience {
+  id              String   @id @default(cuid())
+  candidateId     String
+  candidate       CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  company         String
+  title           String
+  employmentType  String?  // Full-time, Part-time, Internship, Contract
+  location        String?
+  startDate       DateTime
+  endDate         DateTime?
+  isCurrent       Boolean  @default(false)
+  description     String?
+
+  createdAt       DateTime @default(now())
+
+  @@index([candidateId])
+}
+
+model Project {
+  id              String   @id @default(cuid())
+  candidateId     String
+  candidate       CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  title           String
+  description     String
+  technologies    String   // Comma-separated or JSON
+  projectUrl      String?
+  githubUrl       String?
+  startDate       DateTime?
+  endDate         DateTime?
+
+  createdAt       DateTime @default(now())
+
+  @@index([candidateId])
+}
+
+model Certification {
+  id              String   @id @default(cuid())
+  candidateId     String
+  candidate       CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  name            String
+  issuingOrg      String
+  issueDate       DateTime?
+  expiryDate      DateTime?
+  credentialId    String?
+  credentialUrl   String?
+
+  createdAt       DateTime @default(now())
+
+  @@index([candidateId])
+}
+
+// ============================================================================
+// RECRUITER & COMPANY
+// ============================================================================
+
+model RecruiterProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fullName        String
+  phone           String?
+  designation     String?
+  companyId       String?
+  company         Company? @relation(fields: [companyId], references: [id])
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  jobs            Job[]
+  interviews      Interview[]
+
+  @@index([companyId])
+}
+
+model Company {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  description     String?
+  website         String?
+  industry        String?
+  size            String?  // 1-10, 11-50, 51-200, 201-500, 500+
+  logo            String?
+  location        String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  recruiters      RecruiterProfile[]
+  jobs            Job[]
+
+  @@index([name])
+}
+
+// ============================================================================
+// JOBS
+// ============================================================================
+
+enum JobStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+model Job {
+  id                    String    @id @default(cuid())
+  companyId             String
+  company               Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  recruiterId           String
+  recruiter             RecruiterProfile @relation(fields: [recruiterId], references: [id])
+
+  // Basic Info
+  title                 String
+  description           String
+  location              String?
+  salaryMin             Float?
+  salaryMax             Float?
+  salaryCurrency        String    @default("INR")
+  employmentType        String?   // Full-time, Part-time, Contract, Internship
+  experienceMin         Float?
+  experienceMax         Float?
+
+  // AI-extracted requirements
+  requirementsExtracted Boolean   @default(false)
+  requirementsJson      String?   // Structured JSON from AI
+
+  // Eligibility
+  eligibleDegrees       String?   // JSON array
+  eligibleDepartments   String?   // JSON array
+  minimumCGPA           Float?
+  graduationYears       String?   // JSON array
+
+  // Status
+  status                JobStatus @default(DRAFT)
+  publishedAt           DateTime?
+  closedAt              DateTime?
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Relations
+  skills                JobSkill[]
+  applications          Application[]
+  savedBy               SavedJob[]
+  placementDrives       PlacementDrive[]
+  candidateMatches      CandidateMatch[]
+  interviews            Interview[]
+
+  @@index([companyId])
+  @@index([recruiterId])
+  @@index([status])
+  @@index([publishedAt])
+}
+
+enum SkillRequirementType {
+  REQUIRED
+  PREFERRED
+}
+
+model JobSkill {
+  id              String   @id @default(cuid())
+  jobId           String
+  job             Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  skillId         String
+  skill           Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  requirementType SkillRequirementType
+  importance      Int      @default(5) // 1-10 scale
+
+  createdAt       DateTime @default(now())
+
+  @@unique([jobId, skillId])
+  @@index([jobId])
+  @@index([skillId])
+}
+
+// ============================================================================
+// APPLICATIONS
+// ============================================================================
+
+enum ApplicationStatus {
+  APPLIED
+  UNDER_REVIEW
+  SHORTLISTED
+  INTERVIEW
+  SELECTED
+  REJECTED
+}
+
+model Application {
+  id              String   @id @default(cuid())
+  jobId           String
+  job             Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidateId     String
+  candidate       CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  status          ApplicationStatus @default(APPLIED)
+  coverLetter     String?
+  matchScore      Float?
+  appliedVia      String?  // direct, placement_drive, referral
+
+  appliedAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([jobId, candidateId])
+  @@index([jobId])
+  @@index([candidateId])
+  @@index([status])
+}
+
+model SavedJob {
+  id              String   @id @default(cuid())
+  jobId           String
+  job             Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidateId     String
+  candidate       CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  savedAt         DateTime @default(now())
+
+  @@unique([jobId, candidateId])
+  @@index([candidateId])
+}
+
+// ============================================================================
+// INSTITUTE & PLACEMENT
+// ============================================================================
+
+model InstituteProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fullName        String
+  phone           String?
+  designation     String?  // Placement Officer, TPO, etc.
+  instituteId     String?
+  institute       Institute? @relation(fields: [instituteId], references: [id])
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  placementDrives PlacementDrive[]
+
+  @@index([instituteId])
+}
+
+model Institute {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  type            String?  // University, College, IIT, NIT, etc.
+  location        String?
+  website         String?
+  logo            String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  departments     Department[]
+  students        CandidateProfile[]
+  admins          InstituteProfile[]
+  placementDrives PlacementDrive[]
+
+  @@index([name])
+}
+
+model Department {
+  id              String   @id @default(cuid())
+  instituteId     String
+  institute       Institute @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+
+  name            String
+  code            String?
+
+  createdAt       DateTime @default(now())
+
+  // Relations
+  students        CandidateProfile[]
+
+  @@unique([instituteId, name])
+  @@index([instituteId])
+}
+
+// ============================================================================
+// PLACEMENT DRIVES
+// ============================================================================
+
+enum PlacementDriveStatus {
+  DRAFT
+  ACTIVE
+  SHORTLISTING
+  COMPLETED
+  CANCELLED
+}
+
+model PlacementDrive {
+  id                    String   @id @default(cuid())
+  instituteId           String
+  institute             Institute @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  createdById           String
+  createdBy             InstituteProfile @relation(fields: [createdById], references: [id])
+
+  jobId                 String
+  job                   Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  // Drive Details
+  driveName             String
+  description           String?
+  status                PlacementDriveStatus @default(DRAFT)
+
+  // Eligibility (can override job eligibility)
+  eligibilityRules      String?  // JSON with institute-specific rules
+
+  // Analysis Results
+  totalStudents         Int?
+  eligibleStudents      Int?
+  analyzedStudents      Int?
+  recommendedCount      Int?
+
+  // Shortlist
+  finalShortlistCount   Int?
+  shortlistSentAt       DateTime?
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relations
+  students              PlacementDriveStudent[]
+  candidateMatches      CandidateMatch[]
+
+  @@index([instituteId])
+  @@index([jobId])
+  @@index([status])
+}
+
+enum PlacementStudentStatus {
+  ELIGIBLE
+  NOT_ELIGIBLE
+  SHORTLISTED
+  REJECTED
+  SENT_TO_COMPANY
+}
+
+model PlacementDriveStudent {
+  id                    String   @id @default(cuid())
+  driveId               String
+  drive                 PlacementDrive @relation(fields: [driveId], references: [id], onDelete: Cascade)
+  candidateId           String
+  candidate             CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  status                PlacementStudentStatus
+  matchScore            Float?
+  isAIRecommended       Boolean  @default(false)
+  isManuallySelected    Boolean  @default(false)
+  selectionReason       String?
+
+  addedAt               DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([driveId, candidateId])
+  @@index([driveId])
+  @@index([candidateId])
+  @@index([status])
+}
+
+// ============================================================================
+// MATCHING ENGINE
+// ============================================================================
+
+model CandidateMatch {
+  id                    String   @id @default(cuid())
+  candidateId           String
+  candidate             CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  jobId                 String
+  job                   Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  placementDriveId      String?
+  placementDrive        PlacementDrive? @relation(fields: [placementDriveId], references: [id], onDelete: Cascade)
+
+  // Match Scores (Hybrid System)
+  overallScore          Float
+  requiredSkillScore    Float
+  preferredSkillScore   Float
+  projectRelevanceScore Float
+  experienceScore       Float
+  educationScore        Float
+  certificationScore    Float
+  semanticScore         Float
+
+  // Eligibility
+  isEligible            Boolean
+  ineligibilityReasons  String?  // JSON array
+
+  // Match Details
+  matchedSkills         String?  // JSON array of skill IDs
+  missingSkills         String?  // JSON array of skill IDs
+  strengths             String?  // JSON array
+  gaps                  String?  // JSON array
+  recommendation        String?  // STRONG, CONSIDER, WEAK
+
+  calculatedAt          DateTime @default(now())
+
+  @@unique([candidateId, jobId, placementDriveId])
+  @@index([candidateId])
+  @@index([jobId])
+  @@index([placementDriveId])
+  @@index([overallScore])
+}
+
+// ============================================================================
+// SKILL GAP & LEARNING
+// ============================================================================
+
+model SkillGap {
+  id              String   @id @default(cuid())
+  candidateId     String
+  candidate       CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  jobId           String?
+
+  skillName       String
+  priority        Int      // 1 = highest priority
+  impactScore     Float    // How much this gap affects job matches
+
+  status          String   // NOT_FOUND, POSSIBLE, CONFIRMED
+  evidence        String?  // Why we think they lack this skill
+
+  identifiedAt    DateTime @default(now())
+
+  @@index([candidateId])
+  @@index([priority])
+}
+
+model LearningRecommendation {
+  id              String   @id @default(cuid())
+  candidateId     String
+  candidate       CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  title           String
+  description     String
+  skillsTargeted  String   // JSON array
+  estimatedWeeks  Int?
+  priority        Int
+
+  isCompleted     Boolean  @default(false)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([candidateId])
+  @@index([priority])
+}
+
+// ============================================================================
+// INTERVIEWS
+// ============================================================================
+
+enum InterviewStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+model Interview {
+  id              String   @id @default(cuid())
+  jobId           String
+  job             Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidateId     String
+  recruiterId     String
+  recruiter       RecruiterProfile @relation(fields: [recruiterId], references: [id])
+
+  scheduledAt     DateTime
+  duration        Int?     // minutes
+  location        String?  // or meeting link
+  notes           String?
+
+  status          InterviewStatus @default(SCHEDULED)
+  feedback        String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([jobId])
+  @@index([candidateId])
+  @@index([scheduledAt])
+}
+
+// ============================================================================
+// NOTIFICATIONS (Optional for Phase 7)
+// ============================================================================
+
+model Notification {
+  id              String   @id @default(cuid())
+  userId          String
+
+  type            String   // application_status, new_job, match_update, etc.
+  title           String
+  message         String
+  data            String?  // JSON
+
+  isRead          Boolean  @default(false)
+
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
